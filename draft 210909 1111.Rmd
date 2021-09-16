@@ -20,7 +20,7 @@ library(corrplot)
 
 set.seed(210904)
 
-raw <- read.csv("C:/Users/dmosc/OneDrive/Documents/academic/CUNY SPS/DATA621/HW1/moneyball-training-data.csv")
+raw <- read.csv("./data/moneyball-training-data.csv")
 ```
 
 ### Data Exploration
@@ -123,7 +123,7 @@ res <- sapply(shap, `[`, c("statistic", "p.value"))
 res
 ```
 
-The p-value for every variable (except TEAMA_BATTING_HBP, which will be dropped) is near zero. Therefore none of the variables can be considered normally distributed. 
+The p-value for every variable (except TEAM_BATTING_HBP, which will be dropped) is near zero. Therefore none of the variables can be considered normally distributed. 
 ###
 
 An important condition of linear modeling is that variables be uncorrelated with each other. In real-world data, it is rarely possible to fully satisfy this condition. However, we can seek to avoid large pairwise correlations between variables.  
@@ -151,6 +151,7 @@ raw %>%
 
 ###
 What can we say about whether these explanatory variables are linearly related to TARGET_WINS? It doesn't seem like there's much of a relationship of any kind, either linear or nonlinear.
+JW: Looking at `TEAM_BATTING_SO`, althought the groupings are not correlated to wins, it does seem that there are bands of strikeout counts at zero and at 100 SO. 
 ###
 
 Examining `BASERUN` and `FIELDING` variables:
@@ -165,6 +166,9 @@ raw %>%
 
 ###
 What can we say about these?
+
+
+
 ###
 
 Examining `PITCHING` variables:  
@@ -235,9 +239,9 @@ Here we construct new variables to reduce the number of pairs of correlated vari
 ```{r}
 raw <- raw %>%
   mutate("BASERUN_NET_SB" = BASERUN_SB - BASERUN_CS) %>%
-  mutate("OFFENSE_OBP" = (BATTING_H + BATTING_BB)/(BATTING_H + BATTING_BB - BASERUN_CS + (162*27))) %>%
-  mutate("DEFENSE_OBP" = (PITCHING_H + FIELDING_E + PITCHING_BB - FIELDING_DP)/(PITCHING_H + FIELDING_E + PITCHING_BB - FIELDING_DP + (162*27))) %>%
-  mutate("TOT_AT_BATS" = BATTING_H + BATTING_BB - BASERUN_CS + (162*27))
+  mutate("OFFENSE_OBP" = (BATTING_H + BATTING_BB)/(BATTING_H + BATTING_BB - BASERUN_CS ))) %>%
+  mutate("DEFENSE_OBP" = (PITCHING_H + FIELDING_E + PITCHING_BB - FIELDING_DP)/(PITCHING_H + FIELDING_E + PITCHING_BB - FIELDING_DP )) %>%
+  mutate("TOT_AT_BATS" = BATTING_H + BATTING_BB - BASERUN_CS )
 ```
 
 *Drop unneeded columns and move response to final column*.

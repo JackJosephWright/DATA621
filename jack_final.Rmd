@@ -1,0 +1,272 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+
+LOAD PACKAGES
+
+
+```{r}
+library(tidyverse)
+library(GGally)
+library(psych)
+library(stats)
+library(corrplot)
+
+set.seed(210904)
+
+raw <- read.csv("./data/moneyball-training-data.csv")
+```
+
+
+TIDY DATA
+
+```{r}
+raw<-raw%>%filter(TEAM_PITCHING_SO>0)
+raw<-raw %>%
+  mutate(SO_factor = case_when(TEAM_BATTING_SO >= TEAM_PITCHING_SO*.96+10~ 'a',
+                              (TEAM_BATTING_SO<TEAM_PITCHING_SO*.96+10 & TEAM_BATTING_SO>TEAM_PITCHING_SO*.96-50) ~'b',
+                              (TEAM_BATTING_SO<TEAM_PITCHING_SO*.96-50 & TEAM_BATTING_SO>TEAM_PITCHING_SO*.75-0) ~'c',
+                              TEAM_BATTING_SO<TEAM_PITCHING_SO*.75 & TEAM_BATTING_SO>TEAM_PITCHING_SO*.55 ~'d',
+                              TEAM_BATTING_SO<TEAM_PITCHING_SO*.55~'e')) 
+```
+
+
+
+```{r}
+ggplot(data=raw%>%filter(TEAM_PITCHING_SO<2000), aes(x = TEAM_PITCHING_SO, y = TEAM_BATTING_SO, colour = SO_factor)) +
+  geom_point()+geom_abline(slope=.55,intercept=0)
+```
+
+
+```{r}
+names(raw) <- gsub('TEAM_', '', x = names(raw))
+```
+
+After grouping the data along these parameters, we can see from one category that there are differences in the slopes and intercepts depending on which category they fall in
+
+```{r}
+raw<-raw%>%mutate("BASERUN_NET_SB" = BASERUN_SB - BASERUN_CS) %>%
+  mutate("OFFENSE_OBP" = (BATTING_H + BATTING_BB)/(BATTING_H + BATTING_BB +(162*27) )) %>%
+  mutate("DEFENSE_OBP" = (PITCHING_H + PITCHING_BB )/(PITCHING_H  + PITCHING_BB +162*27 )) %>%
+  mutate("TOT_AT_BATS" = BATTING_H + BATTING_BB  )
+```
+
+```{r}
+ggplot(raw, aes(x=BATTING_H,y=TARGET_WINS, color=SO_factor))+geom_point()+geom_smooth(method='lm', se=FALSE)
+```
+
+```{r}
+raw <- raw %>%
+  mutate("TOTAL_BASES" = BATTING_H + BATTING_BB )
+```
+
+```{r}
+df_temp<-raw%>%select(-c(BATTING_HBP,PITCHING_SO,PITCHING_H,PITCHING_HR,PITCHING_BB))
+
+
+#ggpairs(df_temp, mapping=aes(color=SO_factor))
+```
+
+GENERAL MODEL
+
+```{r}
+raw_select<-raw%>%select(-c(INDEX,SO_factor,TOT_AT_BATS,TOTAL_BASES,BASERUN_NET_SB,PITCHING_HR,BATTING_H,BATTING_2B,BATTING_SO,PITCHING_H,BATTING_3B,BASERUN_SB,BATTING_HBP,BATTING_BB,DEFENSE_OBP))
+#raw_select<-raw_select%>%mutate(OFFENSE_OBP=log(OFFENSE_OBP))
+summary(lm.raw<-lm(TARGET_WINS~.,data=raw_select))
+```
+
+```{r}
+library(ggResidpanel)
+resid_panel(lm.raw)
+```
+
+Models by SO_factor
+
+group a
+
+
+```{r}
+df_a<-raw%>%filter(SO_factor=='a')
+
+```
+
+linear model
+```{r}
+df_a_select<-df_a%>%select(-c(INDEX,SO_factor,PITCHING_HR,PITCHING_SO,BASERUN_CS,BATTING_2B,PITCHING_H,PITCHING_BB,BASERUN_SB,BATTING_3B,TOT_AT_BATS,BATTING_BB,BATTING_H,TOTAL_BASES,OFFENSE_OBP,BASERUN_NET_SB,FIELDING_DP))
+summary(lm.a<-lm(TARGET_WINS~.,data=df_a_select))
+```
+
+```{r}
+resid_interact(lm.a,plots = 'all')
+```
+
+I really want to keep BATTING_HBP IN HERE, it accounts for so much R^2 but the p value is a little too high. what does this mean?
+
+
+
+group b
+```{r}
+df_b<-raw%>%filter(SO_factor=='b')
+
+```
+
+linear model
+```{r}
+df_b_select<-df_b%>%select(-c(SO_factor,BATTING_HBP,TOT_AT_BATS,TOTAL_BASES,BASERUN_NET_SB,PITCHING_SO,PITCHING_BB,BATTING_SO,BASERUN_SB,PITCHING_SO,PITCHING_BB,PITCHING_SO,BATTING_BB,BATTING_SO,PITCHING_HR,FIELDING_DP,BATTING_2B,OFFENSE_OBP,PITCHING_H,BATTING_H))
+summary(lm.b<-lm(TARGET_WINS~.,data=df_b_select))
+```
+
+```{r}
+resid_panel(lm.b,plots = 'all')
+```
+
+
+
+
+
+group c
+
+
+```{r}
+df_c<-raw%>%filter(SO_factor=='c')
+
+```
+
+```{r}
+ggplot(df_c, aes(y=TARGET_WINS, x=BATTING_HR))+geom_point()
+```
+splitting df_c by batting HR
+
+```{r}
+df_c_a<-df_c%>%filter(BATTING_HR>110)
+df_c_b<-df_c%>%filter(BATTING_HR<100)
+```
+
+IF YOU SPLIT OUT THESE 28 POINTS DF_C COMPARES WELL
+
+
+linear model
+```{r}
+df_c_b_select<-df_c_b%>%select(-c(INDEX,SO_factor,BATTING_HBP,BASERUN_NET_SB,FIELDING_DP,BASERUN_CS, BATTING_H,BATTING_2B,BATTING_BB,TOT_AT_BATS,TOTAL_BASES,DEFENSE_OBP,BATTING_SO,BATTING_HR,PITCHING_H,BATTING_3B,PITCHING_HR))
+summary(lm.c_b<-lm(TARGET_WINS~.,data=df_c_b_select))
+```
+
+```{r}
+ggpairs(df_c_b_select)
+```
+
+
+```{r}
+resid_panel(lm.c_b,plots = 'all')
+```
+
+
+group c_a
+
+```{r}
+df_c_a_select<-df_c_a%>%select(-c(INDEX,SO_factor,BATTING_HBP,BASERUN_NET_SB,FIELDING_DP,TOT_AT_BATS,TOTAL_BASES,FIELDING_E,PITCHING_HR,BATTING_2B,BATTING_3B,BASERUN_SB,BATTING_BB,BATTING_SO,PITCHING_H,PITCHING_SO,DEFENSE_OBP,PITCHING_BB,BATTING_H,BASERUN_CS,OFFENSE_OBP))
+summary(lm.c_a<-lm(TARGET_WINS~.,data=df_c_a_select))
+```
+```{r}
+ggplot(df_c_a,aes(x=BATTING_HR,y=TARGET_WINS))+geom_point()+geom_smooth(method='lm')
+```
+
+Looking at the 26 points with the whole data
+
+```{r}
+
+out<-as.vector(df_c_a$INDEX)
+df_outlier_factor<-raw%>%mutate(OUT_factor=case_when(
+  (INDEX%in%out)~'in',
+  TRUE~'out'
+  )
+)
+```
+
+
+
+looking out that out factor
+
+```{r}
+c<-c('BASERUN_SB','PITCHING_SB','PITCHING_SO','FIELDING_E','OFFENSE_OBP')
+df_c_examine<-df_outlier_factor%>%select(c(TARGET_WINS,BASERUN_SB,BASERUN_SB,PITCHING_SO,FIELDING_E,OFFENSE_OBP,OUT_factor,SO_factor))
+ggpairs(df_c_examine%>%filter(SO_factor=='c'), mapping=aes(color=OUT_factor))
+```
+
+
+this group seems to disrupt the model's predictive ability  and are clearly outliers of this subgroup with no predictive variables of its own. 
+
+It also is clearly a differnt group from the SO_factor
+
+```{r}
+lm.c<-lm.c_b
+```
+
+
+group d
+
+
+```{r}
+df_d<-raw%>%filter(SO_factor=='d')
+
+```
+
+linear model
+```{r}
+df_d_select<-df_d%>%select(-c(SO_factor,BATTING_HBP,TOT_AT_BATS,TOTAL_BASES,BASERUN_NET_SB,BASERUN_CS,BASERUN_SB,BATTING_3B,BATTING_HR,BATTING_H,BATTING_2B,PITCHING_H,PITCHING_HR,PITCHING_SO,BATTING_SO,DEFENSE_OBP))
+summary(lm.d<-lm(TARGET_WINS~.,data=df_d_select))
+```
+
+```{r}
+resid_interact(lm.d,plots = 'all')
+```
+
+I really want to keep BATTING_HBP IN HERE, it accounts for so much R^2 but the p value is a little too high. what does this mean?
+
+
+
+
+
+group e
+
+
+```{r}
+df_e<-raw%>%filter(SO_factor=='e')
+
+```
+
+linear model
+```{r}
+df_e_select<-df_e%>%select(-c(SO_factor,BATTING_HBP,BASERUN_NET_SB,FIELDING_DP,TOT_AT_BATS,TOTAL_BASES,BATTING_2B,BATTING_3B,BATTING_H,BATTING_BB,PITCHING_H,PITCHING_BB,DEFENSE_OBP,PITCHING_SO,BASERUN_CS,BASERUN_SB,BATTING_HR,BATTING_SO,PITCHING_HR))
+summary(lm.e<-lm(TARGET_WINS~.,data=df_e_select))
+```
+
+```{r}
+ggpairs(df_e_select)
+```
+
+
+```{r}
+resid_interact(lm.e,plots = 'all')
+```
+
+
+
+Model results
+
+```{r}
+r_raw<-summary(lm.raw)$adj.r.squared
+r_a<-summary(lm.a)$adj.r.squared
+r_b<-summary(lm.b)$adj.r.squared
+r_c<-summary(lm.c)$adj.r.squared
+r_d<-summary(lm.d)$adj.r.squared
+r_e<-summary(lm.e)$adj.r.squared
+
+r_adj<-round(c(r_raw,r_a,r_b,r_c,r_d,r_e),2)
+model_names<-c('general',"group a","group b","group c","group d","group e")
+
+data.frame(model_names,r_adj)
+```
+
